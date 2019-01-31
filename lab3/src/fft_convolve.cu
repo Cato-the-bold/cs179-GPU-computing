@@ -66,6 +66,48 @@ cudaProdScaleKernel(const cufftComplex *raw_data, const cufftComplex *impulse_v,
 
 __global__
 void
+cudaMaximumKernel1(cufftComplex *out_data, float *max_abs_val,
+                   int padded_length) {
+    //calculate partial max for threads in the same block.
+    uint thread_index = blockIdx.x * blockDim.x + threadIdx.x;
+    float partial_max = 0.0;
+    while (thread_index < padded_length) {
+        partial_max = fmaxf(partial_max, fabs(out_data[thread_index].x));
+        thread_index += blockDim.x * gridDim.x;
+    }
+
+    atomicMax(max_abs_val, partial_max);
+
+}
+
+__global__
+void
+cudaMaximumKernel2(cufftComplex *out_data, float *max_abs_val,
+                   int padded_length) {
+    //calculate partial max for threads in the same block.
+    uint thread_index = blockIdx.x * blockDim.x + threadIdx.x;
+    extern __shared__ float shmem[];
+    float partial_max = 0.0f;
+
+    while (thread_index < padded_length) {
+        partial_max = fmaxf(partial_max, fabs(out_data[thread_index].x));
+        thread_index += blockDim.x * gridDim.x;
+    }
+
+    shmem[threadIdx.x] = partial_max;
+    __syncthreads();
+
+    if (threadIdx.x==0){
+        for(unsigned int threadIndex = 1; threadIndex < blockDim.x; ++threadIndex){
+            partial_max = fmaxf(partial_max, shmem[threadIndex]);
+        }
+
+        atomicMax(max_abs_val, partial_max);
+    }
+}
+
+__global__
+void
 cudaMaximumKernel(cufftComplex *out_data, float *max_abs_val,
     int padded_length) {
 
@@ -73,27 +115,12 @@ cudaMaximumKernel(cufftComplex *out_data, float *max_abs_val,
     normalization (dividing by maximum).
 
     There are many ways to do this reduction, and some methods
-    have much better performance than others. 
-
-    For this section: Please explain your approach to the reduction,
-    including why you chose the optimizations you did
-    (especially as they relate to GPU hardware).
-
-    You'll likely find the above atomicMax function helpful.
-    (CUDA's atomicMax function doesn't work for floating-point values.)
-    It's based on two principles:
-        1) From Week 2, any atomic function can be implemented using
-        atomic compare-and-swap.
-        2) One can "represent" floating-point values as integers in
-        a way that preserves comparison, if the sign of the two
-        values is the same. (see http://stackoverflow.com/questions/
-        29596797/can-the-return-value-of-float-as-int-be-used-to-
-        compare-float-in-cuda)
+    have much better performance than others.
     */
 
     //calculate partial max for threads in the same block.
     uint thread_index = blockIdx.x * blockDim.x + threadIdx.x;
-    float partial_max = 0.0;
+    float partial_max = 0.0f;
     extern __shared__ float partial_data[];
     while (thread_index < padded_length) {
         partial_max = fmaxf(partial_max, fabs(out_data[thread_index].x));
@@ -111,7 +138,6 @@ cudaMaximumKernel(cufftComplex *out_data, float *max_abs_val,
     }
 
     if (tid==0){
-        printf("max of %d: %f", blockIdx.x, partial_data[0]);
         atomicMax(max_abs_val, partial_data[0]);
     }
 }
@@ -151,7 +177,7 @@ void cudaCallMaximumKernel(const unsigned int blocks,
         float *max_abs_val,
         const unsigned int padded_length) {
 
-    cudaMaximumKernel<<<blocks, threadsPerBlock>>>(out_data, max_abs_val, padded_length);
+    cudaMaximumKernel<<<blocks, threadsPerBlock, threadsPerBlock* sizeof(float) >>>(out_data, max_abs_val, padded_length);
 
 }
 
@@ -162,5 +188,5 @@ void cudaCallDivideKernel(const unsigned int blocks,
         float *max_abs_val,
         const unsigned int padded_length) {
 
-    cudaDivideKernel<<<blocks, threadsPerBlock>>>(out_data, max_abs_val, padded_length);
+    cudaDivideKernel<<<blocks, threadsPerBlock, threadsPerBlock* sizeof(float) >>>(out_data, max_abs_val, padded_length);
 }

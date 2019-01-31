@@ -10,7 +10,7 @@
 #include <cuda_runtime.h>
 #include <algorithm>
 #include <cassert>
-
+#include "helper_cuda.h"
 #include "fft_convolve.cuh"
 #include <cufft.h>
 
@@ -320,46 +320,40 @@ int large_gauss_test(int argc, char **argv){
 
 
         /* CPU Blurring */
-
-
-        cout << endl << "CPU convolution..." << endl;
-
-        memset(output_data_host, 0, padded_length * sizeof(float));
-
-        // Use the CUDA machinery for recording time
-        START_TIMER();
-
-        // (For scoping)
-
-        {
-            #if 1
-
-            for (int i = 0; i < impulse_length; i++){
-                for (int j = 0; j <= i; j++){
-                    output_data_host[i] += input_data[i - j].x 
-                                            * impulse_data[j].x; 
-                }
-            }
-            for (int i = impulse_length; i < N; i++){
-                for (int j = 0; j < impulse_length; j++){
-                    output_data_host[i] += input_data[i - j].x 
-                                            * impulse_data[j].x; 
-                }
-            }
-            for (int i = N; i < padded_length; i++){
-                for (int j = i - (N - 1); j < impulse_length; j++){
-                    output_data_host[i] += input_data[i - j].x 
-                                            * impulse_data[j].x; 
-                }
-            }
-
-            #endif
-        }
-
-        STOP_RECORD_TIMER(cpu_time_ms_convolve);
-
-
-
+//        cout << endl << "CPU convolution..." << endl;
+//        memset(output_data_host, 0, padded_length * sizeof(float));
+//
+//        // Use the CUDA machinery for recording time
+//        START_TIMER();
+//
+//        // (For scoping)
+//
+//        {
+//            #if 1
+//
+//            for (int i = 0; i < impulse_length; i++){
+//                for (int j = 0; j <= i; j++){
+//                    output_data_host[i] += input_data[i - j].x
+//                                            * impulse_data[j].x;
+//                }
+//            }
+//            for (int i = impulse_length; i < N; i++){
+//                for (int j = 0; j < impulse_length; j++){
+//                    output_data_host[i] += input_data[i - j].x
+//                                            * impulse_data[j].x;
+//                }
+//            }
+//            for (int i = N; i < padded_length; i++){
+//                for (int j = i - (N - 1); j < impulse_length; j++){
+//                    output_data_host[i] += input_data[i - j].x
+//                                            * impulse_data[j].x;
+//                }
+//            }
+//
+//            #endif
+//        }
+//
+//        STOP_RECORD_TIMER(cpu_time_ms_convolve);
 
 
 
@@ -453,39 +447,40 @@ int large_gauss_test(int argc, char **argv){
 
 
 
-        cout << "Comparing..." << endl;
-
-#if 1
-        // Compare results
-        // NOTE: Not comparing through the padded length
-        // MAY NEED TO CHANGE THIS
-        bool success = true;
-        for (int i = 0; i < padded_length; i++){
-            if (fabs(output_data_host[i] - output_data_testarr[i].x) < 1e-3){
-                #if 0
-                cout << "Correct output at index " << i << ": " << output_data_host[i] << ", " 
-                    << output_data_testarr[i].x << endl;
-                #endif
-            } else {
-                success = false;
-                cerr << "Incorrect output at index " << i << ": " << output_data_host[i] << ", " 
-                    << output_data_testarr[i].x << endl;
-            }
-        }
-
-        if (success){
-            cout << endl << "Successful output" << endl;
-        }
-#endif
-
-
-        cout << endl;
-        cout << "CPU time (convolve): " << cpu_time_ms_convolve << " milliseconds" << endl;
-        cout << "GPU time (convolve): " << gpu_time_ms_convolve << " milliseconds" << endl;
-        cout << endl << "Speedup factor (convolution): " << cpu_time_ms_convolve / gpu_time_ms_convolve << endl << endl;
+//        cout << "Comparing..." << endl;
+//
+//#if 1
+//        // Compare results
+//        // NOTE: Not comparing through the padded length
+//        // MAY NEED TO CHANGE THIS
+//        bool success = true;
+//        for (int i = 0; i < padded_length; i++){
+//            if (fabs(output_data_host[i] - output_data_testarr[i].x) < 1e-3){
+//                #if 0
+//                cout << "Correct output at index " << i << ": " << output_data_host[i] << ", "
+//                    << output_data_testarr[i].x << endl;
+//                #endif
+//            } else {
+//                success = false;
+//                cerr << "Incorrect output at index " << i << ": " << output_data_host[i] << ", "
+//                    << output_data_testarr[i].x << endl;
+//            }
+//        }
+//
+//        if (success){
+//            cout << endl << "Successful output" << endl;
+//        }
+//#endif
+//
+//
+//        cout << endl;
+//        cout << "CPU time (convolve): " << cpu_time_ms_convolve << " milliseconds" << endl;
+//        cout << "GPU time (convolve): " << gpu_time_ms_convolve << " milliseconds" << endl;
+//        cout << endl << "Speedup factor (convolution): " << cpu_time_ms_convolve / gpu_time_ms_convolve << endl << endl;
 
         // Normalize output (avoids clipping and/or hearing loss)
         // such that maximum value is < 1 (say 0.99999)
+
 
 
         /* CPU normalization... */
@@ -496,7 +491,7 @@ int large_gauss_test(int argc, char **argv){
         START_TIMER();
 
         float max_abs_val = fabs(output_data_testarr[0].x);
-
+        cout << "CPU MAX_ABS:..."<< max_abs_val << endl;
         {
 
             float max_allowed_amp = 0.99999;
@@ -541,18 +536,22 @@ int large_gauss_test(int argc, char **argv){
 
         /* TODO 2: Allocate memory to store the maximum magnitude found. 
         (You only need enough space for one floating-point number.) */
-        cudaMalloc((float**)&dev_max_abs_val, sizeof(float));
+        gpuErrchk(cudaMalloc((void**)&dev_max_abs_val, sizeof(float)));
 
 
         /* TODO 2: Set it to 0 in preparation for running. 
         (Recommend using cudaMemset) */
-        cudaMemset(dev_max_abs_val, 0, sizeof(float));
+        gpuErrchk(cudaMemset(dev_max_abs_val, 0, sizeof(float)));
 
         /* NOTE: This is a function in the fft_convolve_cuda.cu file,
         where you'll fill in the kernel call for finding the maximum
         of the output signal. */
         cudaCallMaximumKernel(blocks, local_size, dev_out_data,
             dev_max_abs_val, padded_length);
+
+        gpuErrchk(cudaMemcpy(&max_abs_val_fromGPU, dev_max_abs_val,  sizeof(float), cudaMemcpyDeviceToHost));
+
+        cout << "GPU MAX_ABS:..."<< max_abs_val_fromGPU << endl;
 
         // Check for errors on kernel call
         err = cudaGetLastError();
@@ -561,12 +560,6 @@ int large_gauss_test(int argc, char **argv){
         } else {
                 cerr << "No kernel error detected" << endl;
         }
-
-        gpuErrchk( cudaMemcpy(&max_abs_val_fromGPU,
-                              dev_max_abs_val, 1 * sizeof(float), cudaMemcpyDeviceToHost) );
-        cout << endl;
-        cout << "CPU normalization constant: " << max_abs_val << endl;
-        cout << "GPU normalization constant: " << max_abs_val_fromGPU << endl;
 
         /* NOTE: This is a function in the fft_convolve_cuda.cu file,
         where you'll fill in the kernel call for dividing the output
@@ -583,11 +576,6 @@ int large_gauss_test(int argc, char **argv){
         }
 
         STOP_RECORD_TIMER(gpu_time_ms_norm);
-
-        // For testing purposes only
-        gpuErrchk( cudaMemcpy(&max_abs_val_fromGPU, 
-            dev_max_abs_val, 1 * sizeof(float), cudaMemcpyDeviceToHost) );
-
 
 
         /* TODO: Now that kernel calls have finished, copy the output
@@ -658,6 +646,7 @@ int large_gauss_test(int argc, char **argv){
 
 
 int main(int argc, char **argv){
+
     // These functions allow you to select the least utilized GPU
     // on your system as well as enforce a time limit on program execution.
     // Please leave these enabled as a courtesy to your fellow classmates
