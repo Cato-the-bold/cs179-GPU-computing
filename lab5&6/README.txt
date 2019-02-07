@@ -1,3 +1,5 @@
+
+
 This is a library that can be used to implement a fully connected neural network
 for classification purposes. A high level interface for constructing a linear
 feed-forward network is implemented in model.hpp and model.cpp. To add a layer,
